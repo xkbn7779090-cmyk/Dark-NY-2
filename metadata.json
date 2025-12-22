@@ -1,0 +1,8 @@
+{
+  "name": "New Year: The Dark Side 2.0",
+  "description": "An immersive interactive long-read for Russian-speaking migrants in Europe, deconstructing the holiday and offering conscious alternatives through AI.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
