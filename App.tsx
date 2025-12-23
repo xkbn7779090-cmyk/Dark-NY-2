@@ -9,6 +9,7 @@ import SocialSection from './components/SocialSection';
 import HealthSection from './components/HealthSection';
 import AISection from './components/AISection';
 import Footer from './components/Footer';
+import MusicPlayer from './components/MusicPlayer';
 
 const App: React.FC = () => {
   useEffect(() => {
@@ -24,6 +25,7 @@ const App: React.FC = () => {
   return (
     <div className="relative min-h-screen bg-slate-950 overflow-x-hidden selection:bg-cyan-500/30">
       <Snowfall />
+      <MusicPlayer />
       
       <main className="relative z-10">
         <Hero />

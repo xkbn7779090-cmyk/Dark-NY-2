@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { TreeDeciduous } from 'lucide-react';
 
@@ -10,6 +9,9 @@ const EcologySection: React.FC = () => {
     co2: budget * 0.5,
     trash: Math.floor(budget / 10)
   };
+
+  const getPlaceholder = (text: string) => 
+    `https://via.placeholder.com/800x1000/020617/059669?text=${encodeURIComponent(text)}`;
 
   return (
     <section className="py-24 px-6 bg-gradient-to-b from-slate-950 to-emerald-950/20">
@@ -68,6 +70,7 @@ const EcologySection: React.FC = () => {
             src="https://images.unsplash.com/photo-1545642433-286821d3f961?q=80&w=800&auto=format&fit=crop" 
             alt="Discarded Christmas trees on the street" 
             className="w-full h-full object-cover opacity-60 grayscale hover:grayscale-0 transition-all duration-700"
+            onError={(e) => { (e.target as HTMLImageElement).src = getPlaceholder('Ecology Issue'); }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent flex flex-col justify-end p-8">
             <div className="p-4 bg-red-600/80 text-white text-xs font-bold uppercase tracking-widest inline-block mb-4 self-start">
