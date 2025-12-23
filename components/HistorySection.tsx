@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { HISTORY_CHARACTERS, AI_STYLE_GUIDE, BASE_URL } from '../constants';
-import { ChevronRight, Info, Book, Sparkles, Wand2, Loader2, Key, Library, RotateCcw, AlertCircle } from 'lucide-react';
+import { HISTORY_CHARACTERS, AI_STYLE_GUIDE, resolvePath } from '../constants';
+import { Info, Book, Sparkles, Wand2, Loader2, Key, RotateCcw, ShieldAlert, Fingerprint } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 
 type TabType = 'fact' | 'legend' | 'interpretation';
@@ -9,13 +10,15 @@ const HistorySection: React.FC = () => {
   const [selectedId, setSelectedId] = useState<string>(HISTORY_CHARACTERS[0].id);
   const [activeTab, setActiveTab] = useState<TabType>('fact');
   const [generating, setGenerating] = useState<string | null>(null);
-  const [isBulkGenerating, setIsBulkGenerating] = useState(false);
-  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const [hasApiKey, setHasApiKey] = useState(false);
   
   const [generatedImages, setGeneratedImages] = useState<Record<string, string>>(() => {
-    const cached = localStorage.getItem('history_portraits_v2');
-    return cached ? JSON.parse(cached) : {};
+    try {
+      const cached = localStorage.getItem('history_portraits_v3');
+      return cached ? JSON.parse(cached) : {};
+    } catch (e) {
+      return {};
+    }
   });
   
   const dossierRef = useRef<HTMLDivElement>(null);
@@ -23,7 +26,7 @@ const HistorySection: React.FC = () => {
   const currentChar = HISTORY_CHARACTERS.find(c => c.id === selectedId) || HISTORY_CHARACTERS[0];
 
   useEffect(() => {
-    localStorage.setItem('history_portraits_v2', JSON.stringify(generatedImages));
+    localStorage.setItem('history_portraits_v3', JSON.stringify(generatedImages));
   }, [generatedImages]);
 
   useEffect(() => {
@@ -54,15 +57,25 @@ const HistorySection: React.FC = () => {
       try {
         await aistudio.openSelectKey();
         setHasApiKey(true);
+        // Small delay for env
+        await new Promise(resolve => setTimeout(resolve, 500));
+        return true;
       } catch (e) {
-        console.error("Failed to open API key selection dialog", e);
+        return false;
       }
     }
+    return false;
   };
 
   const generatePortrait = async (char: typeof HISTORY_CHARACTERS[0]) => {
+    const aistudio = (window as any).aistudio;
+    if (!(await aistudio.hasSelectedApiKey())) {
+      const success = await handleSelectKey();
+      if (!success) throw new Error("API Key required");
+    }
+
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    const fullPrompt = `${char.prompt} ${AI_STYLE_GUIDE}`;
+    const fullPrompt = `${char.prompt}. ${AI_STYLE_GUIDE}. Extremely detailed, cinematic 4k, mythological horror aesthetic. No text.`;
     
     const response = await ai.models.generateContent({
       model: 'gemini-3-pro-image-preview',
@@ -70,298 +83,207 @@ const HistorySection: React.FC = () => {
       config: {
         imageConfig: {
           aspectRatio: "3:4",
-          imageSize: "2K"
+          imageSize: "1K"
         }
       }
     });
 
-    const parts = response.candidates?.[0]?.content?.parts || [];
-    const imagePart = parts.find(p => p.inlineData);
-
+    const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
     if (imagePart?.inlineData) {
       return `data:image/png;base64,${imagePart.inlineData.data}`;
     }
-    throw new Error("No image data returned from API");
+    throw new Error("Failed to generate image");
   };
 
   const handleGenerateAI = async (char: typeof HISTORY_CHARACTERS[0]) => {
-    if (generating || isBulkGenerating) return;
-
-    if (!hasApiKey) {
-      await handleSelectKey();
-    }
-
+    if (generating) return;
     setGenerating(char.id);
     try {
       const imageUrl = await generatePortrait(char);
       setGeneratedImages(prev => ({ ...prev, [char.id]: imageUrl }));
     } catch (error: any) {
-      console.error('Failed to generate portrait:', error);
-      if (error?.message?.includes("Requested entity was not found")) {
+      console.error(error);
+      if (error?.message?.includes("entity was not found")) {
         setHasApiKey(false);
-        alert('Пожалуйста, выберите корректный платный API ключ для работы Pro модели.');
+        alert('Пожалуйста, выберите платный API ключ для доступа к модели Pro Image.');
       } else {
-        alert('Ошибка при генерации портрета. Проверьте настройки ключа.');
+        alert('Ошибка генерации. Проверьте настройки ключа.');
       }
     } finally {
-      setGenerating(null);
-    }
-  };
-
-  const handleGenerateMissing = async () => {
-    if (generating || isBulkGenerating) return;
-
-    if (!hasApiKey) {
-      await handleSelectKey();
-    }
-
-    const missingChars = HISTORY_CHARACTERS.filter(char => !generatedImages[char.id]);
-    
-    if (missingChars.length === 0) {
-      if (confirm('Архив уже полностью укомплектован 2K портретами. Хотите перегенерировать всё заново?')) {
-        setGeneratedImages({});
-      } else {
-        return;
-      }
-    }
-
-    const finalChars = missingChars.length > 0 ? missingChars : HISTORY_CHARACTERS;
-    setIsBulkGenerating(true);
-    setBulkProgress({ current: 0, total: finalChars.length });
-    
-    let currentNewImages = { ...generatedImages };
-
-    try {
-      for (let i = 0; i < finalChars.length; i++) {
-        const char = finalChars[i];
-        setGenerating(char.id);
-        setBulkProgress(prev => ({ ...prev, current: i + 1 }));
-        
-        const imageUrl = await generatePortrait(char);
-        currentNewImages[char.id] = imageUrl;
-        setGeneratedImages({ ...currentNewImages });
-      }
-    } catch (error: any) {
-      console.error('Bulk generation error:', error);
-      if (error?.message?.includes("Requested entity was not found")) {
-        setHasApiKey(false);
-      }
-      alert('Произошла ошибка при массовой генерации. Процесс приостановлен.');
-    } finally {
-      setIsBulkGenerating(false);
       setGenerating(null);
     }
   };
 
   const handleResetArchive = () => {
-    if (confirm('Вы уверены, что хотите удалить все сгенерированные AI-портреты и вернуться к стандартным изображениям?')) {
+    if (confirm('Сбросить все сгенерированные AI-портреты?')) {
       setGeneratedImages({});
-      localStorage.removeItem('history_portraits_v2');
+      localStorage.removeItem('history_portraits_v3');
     }
   };
 
-  const displayImage = generatedImages[currentChar.id] || currentChar.image;
-  const missingCount = HISTORY_CHARACTERS.length - Object.keys(generatedImages).length;
+  const displayImage = resolvePath(generatedImages[currentChar.id] || currentChar.image);
   const completionPercentage = Math.round((Object.keys(generatedImages).length / HISTORY_CHARACTERS.length) * 100);
 
-  const getPlaceholder = (text: string, width = 800, height = 600) => 
-    `https://via.placeholder.com/${width}x${height}/020617/fbbf24?text=${encodeURIComponent(text)}`;
-
   return (
-    <section id="history-section" className="py-16 md:py-24 px-4 md:px-6 bg-slate-950 overflow-hidden">
-      <div className="max-w-6xl mx-auto space-y-12 md:space-y-16">
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
-          <div className="text-left space-y-2 md:space-y-4">
-            <h2 className="text-4xl md:text-8xl font-orbitron font-bold uppercase text-amber-500 tracking-tighter leading-tight drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]">
-              Корни праздника
-            </h2>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-              <p className="text-slate-400 font-light text-base md:text-xl max-w-xl">
-                Архив фольклорных сущностей. Каждое изображение воссоздано Pro-моделью в 2K качестве.
-              </p>
-              {missingCount > 0 && !isBulkGenerating && (
-                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] text-amber-500 font-bold uppercase tracking-widest animate-pulse">
-                  <AlertCircle size={12} /> Обнаружены пустые ячейки архива
-                </div>
-              )}
+    <section id="history-section" className="py-24 px-6 bg-[#020617] relative overflow-hidden">
+      <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-amber-500/5 blur-[120px] rounded-full -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+      
+      <div className="max-w-7xl mx-auto space-y-16">
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 border-b border-slate-900 pb-12">
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+               <ShieldAlert size={24} />
+               <span className="text-xs font-black uppercase tracking-[0.6em]">CLASSIFIED ARCHIVE: MYTHOS</span>
             </div>
+            <h2 className="text-5xl md:text-8xl font-orbitron font-bold uppercase text-white tracking-tighter leading-none">
+              Тёмные <span className="text-amber-500">Корни</span>
+            </h2>
+            <p className="text-slate-500 text-lg max-w-xl font-light">
+              Праздник, каким мы его знаем, вырос на почве страха и подчинения. Исследуй тени прошлого.
+            </p>
           </div>
           
-          <div className="flex flex-wrap gap-4">
-            <button 
-              onClick={handleGenerateMissing}
-              disabled={isBulkGenerating || !!generating}
-              className={`flex items-center gap-3 px-6 py-4 rounded-xl font-bold uppercase text-[11px] tracking-widest transition-all shadow-xl active:scale-95 disabled:opacity-50 ${
-                missingCount > 0 
-                ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-emerald-900/30' 
-                : 'bg-slate-800 text-slate-400 border border-slate-700'
-              }`}
-            >
-              {isBulkGenerating ? (
-                <div className="flex items-center gap-3">
-                  <Loader2 className="animate-spin" size={16} />
-                  <span>Архивация: {bulkProgress.current} / {bulkProgress.total}</span>
-                </div>
-              ) : (
-                <>
-                  <Library size={16} />
-                  <span>{missingCount > 0 ? `Восстановить архив (${missingCount})` : 'Обновить облики (Pro 2K)'}</span>
-                </>
-              )}
-            </button>
-            
-            {Object.keys(generatedImages).length > 0 && !isBulkGenerating && (
+          <div className="flex items-center gap-4">
+            {Object.keys(generatedImages).length > 0 && (
               <button 
                 onClick={handleResetArchive}
-                className="flex items-center justify-center p-4 bg-slate-900/50 hover:bg-red-950/30 text-slate-500 hover:text-red-500 border border-slate-800 hover:border-red-900/50 rounded-xl transition-all"
+                className="p-4 bg-slate-900/50 hover:bg-red-950/20 text-slate-500 hover:text-red-500 border border-slate-800 rounded-2xl transition-all"
                 title="Сбросить архив"
               >
-                <RotateCcw size={18} />
+                <RotateCcw size={20} />
               </button>
             )}
 
-            {!hasApiKey && !isBulkGenerating && (
+            {!hasApiKey && (
               <button 
                 onClick={handleSelectKey}
-                className="flex items-center gap-2 px-6 py-4 bg-amber-500/10 border border-amber-500/30 text-amber-500 rounded-xl font-bold uppercase text-[11px] tracking-widest hover:bg-amber-500/20 transition-all"
+                className="px-6 py-4 bg-amber-600 hover:bg-amber-500 text-white hover:text-black rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] transition-all flex items-center gap-3 shadow-2xl shadow-amber-950/20"
               >
-                <Key size={16} /> Подключить Pro-модель
+                <Key size={16} /> Активировать High-Res
               </button>
             )}
           </div>
         </div>
 
-        <div className="w-full h-1.5 bg-slate-900 rounded-full overflow-hidden relative border border-white/5">
+        <div className="w-full h-1 bg-slate-900 rounded-full overflow-hidden relative">
           <div 
-            className="h-full bg-gradient-to-r from-amber-600 to-emerald-500 transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+            className="h-full bg-amber-500 transition-all duration-1000 ease-in-out shadow-[0_0_15px_rgba(245,158,11,0.5)]"
             style={{ width: `${completionPercentage}%` }}
           ></div>
-          {isBulkGenerating && (
-             <div className="absolute inset-0 bg-white/20 animate-[shimmer_1s_infinite] pointer-events-none"></div>
-          )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-4 order-2 lg:order-1">
-            <div className="flex lg:flex-col gap-4 overflow-x-auto lg:overflow-visible pb-4 lg:pb-0 custom-scrollbar snap-x snap-mandatory">
-              {HISTORY_CHARACTERS.map((char) => (
-                <button
-                  key={char.id}
-                  onClick={() => handleSelect(char.id)}
-                  className={`flex-shrink-0 w-[280px] lg:w-full snap-center group text-left p-4 rounded-2xl transition-all duration-300 flex items-center gap-4 border ${
-                    selectedId === char.id 
-                    ? 'bg-amber-500/10 border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.2)]' 
-                    : 'bg-slate-900/40 border-slate-800/50 grayscale hover:grayscale-0 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="w-14 h-18 md:w-16 md:h-20 rounded-lg overflow-hidden flex-shrink-0 border border-slate-800 bg-slate-800 relative">
-                    <img 
-                      src={generatedImages[char.id] || char.image} 
-                      alt={char.name} 
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).src = getPlaceholder(char.name[0], 150, 200); }}
-                    />
-                    {(generating === char.id || (isBulkGenerating && !generatedImages[char.id])) && (
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                        <Loader2 className="animate-spin text-amber-500" size={16} />
-                      </div>
-                    )}
-                    {generatedImages[char.id] && (
-                      <div className="absolute top-1 right-1">
-                        <Sparkles size={10} className="text-amber-500 fill-amber-500" />
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: char.accent }}></span>
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{char.region}</span>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+          <div className="lg:col-span-4 order-2 lg:order-1 flex flex-col gap-4">
+            {HISTORY_CHARACTERS.map((char) => (
+              <button
+                key={char.id}
+                onClick={() => handleSelect(char.id)}
+                className={`group text-left p-5 rounded-3xl transition-all duration-500 flex items-center gap-6 border ${
+                  selectedId === char.id 
+                  ? 'bg-amber-500/10 border-amber-500/40 shadow-2xl' 
+                  : 'bg-slate-900/40 border-slate-800/40 hover:border-slate-700 hover:bg-slate-900/60'
+                }`}
+              >
+                <div className="w-16 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-800 border border-slate-700 relative">
+                  <img 
+                    src={resolvePath(generatedImages[char.id] || char.image)} 
+                    alt={char.name} 
+                    className={`w-full h-full object-cover transition-all duration-700 ${selectedId === char.id ? 'scale-110 blur-0' : 'grayscale'}`}
+                  />
+                  {generating === char.id && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <Loader2 className="animate-spin text-amber-500" size={20} />
                     </div>
-                    <h3 className={`text-lg md:text-xl font-ruslan truncate leading-tight ${selectedId === char.id ? 'text-amber-500' : 'text-slate-300'}`}>
-                      {char.name}
-                    </h3>
-                    <p className="text-[10px] text-slate-500 truncate uppercase tracking-tighter mt-1">{char.tagline}</p>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500">{char.region}</span>
                   </div>
-                </button>
-              ))}
-            </div>
+                  <h3 className={`text-xl md:text-2xl font-ruslan truncate ${selectedId === char.id ? 'text-amber-500' : 'text-slate-300'}`}>
+                    {char.name}
+                  </h3>
+                  <p className="text-[10px] text-slate-600 uppercase font-bold tracking-tighter truncate">{char.tagline}</p>
+                </div>
+              </button>
+            ))}
           </div>
 
           <div ref={dossierRef} className="lg:col-span-8 order-1 lg:order-2">
-            <div className="glass-morphism rounded-[2.5rem] border border-slate-800 overflow-hidden min-h-[600px] flex flex-col transition-all duration-500 shadow-2xl relative">
-              <div className="relative h-64 sm:h-80 md:h-96 overflow-hidden bg-slate-900">
+            <div className="glass-morphism rounded-[3rem] border border-slate-800/50 overflow-hidden min-h-[700px] flex flex-col shadow-2xl bg-black/40 relative">
+              <div className="relative h-[400px] md:h-[500px] overflow-hidden group">
                 {generating === currentChar.id ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-slate-900 text-amber-500 space-y-4">
-                    <Loader2 className="animate-spin" size={48} />
-                    <p className="font-orbitron uppercase text-xs tracking-widest animate-pulse">Воссоздание облика 2K...</p>
+                  <div className="w-full h-full flex flex-col items-center justify-center bg-slate-950 text-amber-500 space-y-6">
+                    <Loader2 className="animate-spin" size={64} />
+                    <p className="font-orbitron uppercase text-sm tracking-[0.5em] animate-pulse font-black">Reconstructing Archetype...</p>
                   </div>
                 ) : (
                   <img 
-                    key={currentChar.id + (generatedImages[currentChar.id] ? '_gen' : '_orig')}
+                    key={currentChar.id}
                     src={displayImage} 
                     alt={currentChar.name} 
-                    className="w-full h-full object-cover animate-fade-in grayscale-[0.3] hover:grayscale-0 transition-all duration-700" 
-                    onError={(e) => { (e.target as HTMLImageElement).src = getPlaceholder(currentChar.name); }}
+                    className="w-full h-full object-cover animate-fade-in transition-all duration-1000 scale-[1.01] hover:scale-105" 
                   />
                 )}
                 
-                <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
-                <div className="absolute bottom-6 left-6 md:bottom-10 md:left-10 space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-3 py-1 bg-amber-500/20 border border-amber-500/30 text-amber-500 text-[10px] font-bold uppercase rounded-full backdrop-blur-md">
-                      СТАТУС: АКТИВЕН
+                <div className="absolute inset-0 bg-gradient-to-t from-[#020617] via-[#020617]/10 to-transparent"></div>
+                
+                <div className="absolute top-8 left-8 flex items-center gap-4">
+                   <div className="p-3 bg-black/60 border border-white/5 backdrop-blur-md rounded-2xl flex items-center gap-3">
+                     <Fingerprint size={20} className="text-amber-500" />
+                     <div className="flex flex-col">
+                       <span className="text-[8px] uppercase font-black tracking-widest text-slate-500">Subject ID</span>
+                       <span className="text-xs font-orbitron text-white">#{currentChar.id.toUpperCase()}</span>
+                     </div>
+                   </div>
+                </div>
+
+                <div className="absolute bottom-10 left-10 md:bottom-16 md:left-16 max-w-2xl">
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="px-4 py-1.5 bg-amber-500/20 border border-amber-500/40 text-amber-500 text-[10px] font-black uppercase rounded-full backdrop-blur-xl tracking-widest">
+                      ARCHIVE STATUS: UNLOCKED
                     </span>
                     {generatedImages[currentChar.id] && (
-                      <span className="px-3 py-1 bg-emerald-500/20 border border-emerald-500/30 text-emerald-500 text-[10px] font-bold uppercase rounded-full backdrop-blur-md flex items-center gap-1">
-                        <Sparkles size={10} /> Pro Визуализация
+                      <span className="px-4 py-1.5 bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 text-[10px] font-black uppercase rounded-full backdrop-blur-xl flex items-center gap-2">
+                        <Sparkles size={12} /> AI Visual Enhancement
                       </span>
                     )}
                   </div>
-                  <h3 className="text-4xl md:text-6xl font-ruslan text-white drop-shadow-2xl leading-none">{currentChar.name}</h3>
+                  <h3 className="text-5xl md:text-8xl font-ruslan text-white leading-none drop-shadow-2xl">{currentChar.name}</h3>
                 </div>
                 
-                <div className="absolute bottom-6 right-6 md:bottom-10 md:right-10 group">
+                <div className="absolute bottom-10 right-10 md:bottom-16 md:right-16">
                   <button 
                     onClick={() => handleGenerateAI(currentChar)}
-                    disabled={!!generating || isBulkGenerating}
-                    className="p-4 bg-emerald-500 hover:bg-emerald-400 text-slate-950 rounded-full shadow-2xl transition-all hover:scale-110 active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center"
-                    title="Сгенерировать High-Res портрет"
+                    disabled={!!generating}
+                    className="w-20 h-20 bg-amber-500 hover:bg-amber-400 text-black rounded-full shadow-[0_0_30px_rgba(245,158,11,0.4)] transition-all hover:scale-110 active:scale-90 disabled:opacity-50 disabled:scale-100 flex items-center justify-center relative overflow-hidden group"
+                    title="Generate AI Portrait"
                   >
-                    {generating === currentChar.id ? <Loader2 className="animate-spin" size={24} /> : <Wand2 size={24} />}
+                    {generating === currentChar.id ? <Loader2 className="animate-spin" size={32} /> : <Wand2 size={32} />}
+                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
                   </button>
-                  <div className="absolute bottom-full right-0 mb-4 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                    <div className="bg-slate-900 border border-emerald-500/30 px-4 py-2 rounded-xl text-[10px] text-emerald-400 font-bold uppercase tracking-widest whitespace-nowrap shadow-2xl">
-                      Сгенерировать Pro Portrait
-                    </div>
-                  </div>
-                </div>
-
-                <div className="absolute top-6 right-6 md:top-10 md:right-10">
-                   <div className="w-12 h-12 rounded-full border border-white/10 flex items-center justify-center backdrop-blur-md bg-black/30">
-                     <span className="text-[10px] font-bold font-orbitron text-slate-500">#{currentChar.id.toUpperCase().slice(0,3)}</span>
-                   </div>
                 </div>
               </div>
 
-              <div className="p-6 md:p-12 space-y-8 flex-1 flex flex-col bg-slate-950/40">
-                <p className="text-lg md:text-2xl font-light text-slate-300 italic border-l-4 pl-6 leading-relaxed" style={{ borderColor: currentChar.accent }}>
+              <div className="p-8 md:p-16 space-y-12 flex-1 flex flex-col">
+                <blockquote className="text-2xl md:text-4xl font-light text-slate-300 italic border-l-8 pl-8 leading-tight py-2" style={{ borderColor: currentChar.accent }}>
                   «{currentChar.tagline}»
-                </p>
+                </blockquote>
 
-                <div className="space-y-8 flex-1 flex flex-col">
-                  <div className="flex flex-wrap gap-2 p-1.5 bg-slate-900/50 rounded-2xl self-start border border-white/5">
+                <div className="space-y-10 flex-1 flex flex-col">
+                  <div className="flex flex-wrap gap-3 p-1.5 bg-slate-900/60 rounded-[1.5rem] self-start border border-white/5 backdrop-blur-md">
                     {[
-                      { id: 'fact', label: 'Факт', icon: <Info size={14} /> },
-                      { id: 'legend', label: 'Легенда', icon: <Book size={14} /> },
-                      { id: 'interpretation', label: 'Интерпретация', icon: <Sparkles size={14} /> }
+                      { id: 'fact', label: 'Данные', icon: <Info size={16} /> },
+                      { id: 'legend', label: 'Миф', icon: <Book size={16} /> },
+                      { id: 'interpretation', label: 'Анализ', icon: <Sparkles size={16} /> }
                     ].map(tab => (
                       <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id as TabType)}
-                        className={`px-4 py-2 md:px-7 md:py-3 rounded-xl text-[10px] md:text-xs font-bold flex items-center gap-2 transition-all duration-300 ${
+                        className={`px-6 py-3 md:px-10 md:py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all duration-300 flex items-center gap-3 ${
                           activeTab === tab.id 
-                          ? 'bg-amber-500 text-black shadow-lg shadow-amber-500/20' 
-                          : 'text-slate-500 hover:text-slate-300'
+                          ? 'bg-amber-500 text-black shadow-xl shadow-amber-500/20' 
+                          : 'text-slate-500 hover:text-slate-200'
                         }`}
                       >
                         {tab.icon} {tab.label}
@@ -369,24 +291,21 @@ const HistorySection: React.FC = () => {
                     ))}
                   </div>
 
-                  <div className="text-base md:text-xl text-slate-300 leading-relaxed font-light animate-fade-in flex-1">
+                  <div className="text-lg md:text-2xl text-slate-300 leading-relaxed font-light animate-fade-in flex-1">
                     {activeTab === 'fact' && currentChar.fact}
                     {activeTab === 'legend' && currentChar.legend}
                     {activeTab === 'interpretation' && currentChar.interpretation}
                   </div>
                 </div>
 
-                <div className="pt-8 border-t border-slate-900 flex flex-col md:flex-row gap-8 md:items-center">
-                  <div className="flex-1 space-y-2">
-                    <span className="text-[10px] uppercase tracking-widest text-slate-600 font-bold block">Почему важно сейчас</span>
-                    <p className="text-sm md:text-base text-slate-400 leading-relaxed">{currentChar.importance}</p>
+                <div className="pt-10 border-t border-slate-900 flex flex-col md:flex-row gap-10 md:items-center">
+                  <div className="flex-1 space-y-3">
+                    <span className="text-[10px] uppercase tracking-[0.4em] text-slate-600 font-black block">КОММЕНТАРИЙ АНАЛИТИКА</span>
+                    <p className="text-base text-slate-400 leading-relaxed">{currentChar.importance}</p>
                   </div>
-                  <div className="flex gap-4">
-                    <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="text-[8px] text-slate-600 hover:text-slate-400 transition-colors uppercase vertical-rl">Billing Info</a>
-                    <button className="px-8 py-3.5 border border-slate-800 text-slate-500 text-[10px] uppercase tracking-[0.2em] font-bold hover:text-white hover:border-slate-600 transition-all rounded-2xl bg-slate-900/40 shrink-0">
-                      Источники Архива
-                    </button>
-                  </div>
+                  <button className="px-10 py-4 border border-slate-800 text-slate-500 text-[10px] uppercase tracking-[0.3em] font-black hover:text-white hover:border-slate-600 transition-all rounded-2xl bg-slate-950/50 backdrop-blur-md">
+                    ПОДРОБНЫЕ ИСТОЧНИКИ
+                  </button>
                 </div>
               </div>
             </div>
@@ -395,30 +314,12 @@ const HistorySection: React.FC = () => {
       </div>
 
       <style>{`
-        .custom-scrollbar::-webkit-scrollbar {
-          height: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-          background: #1e293b;
-          border-radius: 10px;
-        }
-        @media (min-width: 1024px) {
-          .custom-scrollbar::-webkit-scrollbar {
-            width: 0;
-          }
-        }
         @keyframes fade-in {
-          from { opacity: 0; transform: scale(1.05); }
-          to { opacity: 1; transform: scale(1); }
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         .animate-fade-in {
-          animation: fade-in 0.5s ease-out forwards;
-        }
-        .vertical-rl { writing-mode: vertical-rl; }
-        
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
+          animation: fade-in 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </section>

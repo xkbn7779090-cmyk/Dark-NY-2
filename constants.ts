@@ -1,3 +1,4 @@
+
 export const COLORS = {
   obsidian: '#020617',
   crimson: '#7f1d1d',
@@ -5,6 +6,25 @@ export const COLORS = {
   gold: '#fbbf24',
   neonCyan: '#00ffea',
   warmGold: '#ffd700',
+};
+
+export const BREAKPOINTS = {
+  mobile: 360,
+  tablet: 768,
+  desktop: 1024,
+};
+
+export const SOURCES = {
+  crime: [
+    { name: 'WHO (World Health Organization)', url: 'https://www.who.int' },
+    { name: 'Eurostat', url: 'https://ec.europa.eu/eurostat' },
+    { name: 'Politie.nl', url: 'https://www.politie.nl' },
+    { name: 'CIS Stat Committee', url: 'http://www.cisstat.com' }
+  ],
+  ecology: [
+    { name: 'Environmental Protection Agency (EPA)', url: 'https://www.epa.gov' },
+    { name: 'National Geographic: Ecology of Xmas', url: 'https://www.nationalgeographic.com' }
+  ]
 };
 
 export const CRIMES_DATA = [
@@ -21,109 +41,100 @@ export const HISTORY_CHARACTERS = [
     id: 'krampus',
     name: 'КРАМПУС',
     region: 'Альпы',
-    tagline: 'Праздник держится на дисциплине — и на страхе.',
+    tagline: 'Праздник держится на страхе.',
     accent: '#ef4444',
-    fact: 'В традициях Центральной Европы давно существует дуэт "благой даритель" и "строгий спутник" — социальный механизм контроля поведения в общине зимой, когда порядок важнее комфорта.',
-    legend: 'Рогатый, звенящий цепями, приходит в самую тёмную часть сезона, чтобы напомнить: последствия существуют, даже когда "все празднуют".',
-    interpretation: 'Мы унаследовали не только огни и сладости, но и скрытую логику: "будь правильным — заслужишь тепло". Когда праздник становится витриной успеха, этот слой возвращается в виде стыда: "я не дотягиваю".',
-    importance: 'Крампус — метафора внутреннего контролёра, который просыпается именно в декабре.',
-    image: 'https://images.unsplash.com/photo-1511210086820-f9479e009477?auto=format&fit=crop&q=80&w=1200',
-    prompt: 'Krampus — alpine folkloric horned figure, subtle bells and worn chains, winter night atmosphere.'
-  },
-  {
-    id: 'ruprecht',
-    name: 'КНЕХТ РУПРЕХТ',
-    region: 'Германия',
-    tagline: 'Помощник святого: награда и наказание в одном пакете.',
-    accent: '#f8fafc',
-    fact: 'В ряде региональных европейских традиций рядом с "светлым" персонажем появляется "служитель порядка" — роль, поддерживающая социальные нормы.',
-    legend: 'Он задаёт вопросы, он "видит", он фиксирует: кто соблюдал правила, кто — нет. Иногда ему приписывают мешок и символические атрибуты дороги.',
-    interpretation: 'Это про власть ритуала: общество делегирует одному образу право быть строгим, чтобы большинству было комфортно "быть добрыми".',
-    importance: 'Когда ты в новой стране, социальные сравнения болезненнее. Рупрехт — маска нормы, под которую легко провалиться.',
-    image: 'https://images.unsplash.com/photo-1543336337-1249b2c3ec7c?auto=format&fit=crop&q=80&w=1200',
-    prompt: 'Knecht Ruprecht — austere German winter companion, heavy dark cloak and wooden staff, soft lantern glow in a snowy village.'
+    fact: 'В ночь на 5 декабря Крампус сопровождает Св. Николая, наказывая непослушных детей розгами. Это тень праздника, которую мы пытаемся забыть.',
+    legend: 'Рогатый демон с цепями. Он забирает "плохих" в мешок. Метафора подавленной агрессии праздничного периода.',
+    interpretation: 'Мы боимся не монстра, а осуждения. "Был ли ты хорошим мальчиком?" — это первый социальный кредит.',
+    importance: 'Напоминание о том, что у даров есть цена.',
+    image: './assets/krampus.png', 
+    prompt: 'Krampus, dark horned demon, realistic fur texture, menacing expression, cinematic lighting, photorealistic 8k, scary, winter forest background.'
   },
   {
     id: 'perchta',
     name: 'ПЕРХТА',
-    region: 'Альпы',
-    tagline: 'Суд зимы: порядок дома и порядок в голове.',
-    accent: '#fbbf24',
-    fact: 'В фольклорных слоях Альп встречаются персонажи, связанные with зимними обходами, домашним укладом и моральным балансом общины.',
-    legend: 'Её приход связывают with оценкой труда, чистоты, правильности ритуалов — как будто сама зима смотрит на дом и решает, есть ли в нём место теплу.',
-    interpretation: 'Перхта — не "пугалка", а зеркало. Она напоминает: праздник начинался как договор с хаосом.',
-    importance: 'Перхта попадает в нерв: ты не обязан закрывать год идеально — достаточно сделать его честно.',
-    image: 'https://images.unsplash.com/photo-1544273677-277914cba40a?auto=format&fit=crop&q=80&w=1200',
-    prompt: 'Perchta (Berchta) — sacred strict winter guardian, traditional alpine folk costume motifs, dual nature visage.'
+    region: 'Австрия',
+    tagline: 'Чистота дома или вспоротый живот.',
+    accent: '#94a3b8',
+    fact: 'Языческая богиня, ставшая ведьмой. Проверяла, закончена ли пряжа к Крещению. Если нет — могла наказать физически.',
+    legend: 'Двуликая: прекрасная дева в белом или старуха. В современной трактовке — бледная женщина с венком из хвои и темным макияжем.',
+    interpretation: 'Перхта — это дедлайн. Невроз "успеть всё до Нового года" имеет древние корни.',
+    importance: 'Символ хаоса, который нужно упорядочить.',
+    image: './assets/perchta.png',
+    prompt: 'Perchta, pale woman with dark eye makeup, pine wreath on head, winter forest, gothic style, mysterious, cinematic portrait.'
   },
   {
-    id: 'karachun',
-    name: 'КАРАЧУН',
-    region: 'СНГ / Славяне',
-    tagline: 'Точка года, где ночь сильнее дня.',
-    accent: '#818cf8',
-    fact: 'В славянских регионах существует множество зимних персонажей, связанных with морозом и темнотой — фольклор часто фиксирует именно ощущение угрозы.',
-    legend: 'Он "укорочивает день", напоминает о конце и о том, что природа не обязана быть доброй. Его власть — не злость, а холодная неизбежность.',
-    interpretation: 'Карачун — про честность: зима не улыбается. Если праздник превращают в обязательное счастье, психика начинает врать.',
-    importance: 'Карачун — язык, на котором можно признать темноту, не превращая её в "поражение".',
-    image: 'https://images.unsplash.com/photo-1547492167-735914c6e917?auto=format&fit=crop&q=80&w=1200',
-    prompt: 'Karachun — Slavic winter darkness deity, heavy embroidered fur cloak, icy forest twilight, mystical presence.'
-  },
-  {
-    id: 'goat',
-    name: 'ЙОЛЬСКИЙ КОЗЁЛ',
-    region: 'Скандинавия',
-    tagline: 'Жертвенный символ, ставший милым декором.',
-    accent: '#10b981',
-    fact: 'В скандинавском культурном поле "йольские" образы — это наследие дохристианских зимних практик, переплетенных with городскими традициями.',
-    legend: 'Козёл как страж зимнего порога: знак силы, урожая, выживания и цены, которую платят за тепло.',
-    interpretation: 'Это метафора потребления: то, что было символом договора with природой, стало товаром на полке.',
-    importance: 'В Европе декор легко превращается в финансовую ловушку. Йольский козёл предлагает иной ход: меньше вещей — больше смысла.',
-    image: 'https://images.unsplash.com/photo-1607335614551-3062bf90f30e?auto=format&fit=crop&q=80&w=1200',
-    prompt: 'Yule Goat (Julbock) — ceremonial straw-goat symbol brought to life as a guardian protector, hyper-detailed organic straw texture.'
-  },
-  {
-    id: 'mari',
-    name: 'МАРИ ЛВИД',
+    id: 'mari_lwyd',
+    name: 'МАРИ ЛУИД',
     region: 'Уэльс',
-    tagline: 'Песня-поединок: ритуал, который пережил маркетинг.',
-    accent: '#22d3ee',
-    fact: 'В британских региональных традициях существовали зимние обходы и состязательные песенные форматы — коллективные практики связи в тёмный сезон.',
-    legend: 'Она приходит как испытание: пустишь ли ты праздник внутрь? Готов ли ты отвечать — не кошельком, а голосом и присутствием?',
-    interpretation: 'Мари Лвид — антитеза маркетингу. Здесь ценность не в покупке, а в участии.',
-    importance: 'Мари Лвид подсказывает практику: маленькая группа, игра, песня, ритуал — и ты снова чувствуешь опору.',
-    image: 'https://images.unsplash.com/photo-1512351737369-09726754402a?auto=format&fit=crop&q=80&w=1200',
-    prompt: 'Mari Lwyd — Welsh ritual horse-skull figure presented respectfully as a cultural artifact, ribbons, white cloak, candlelit night.'
+    tagline: 'Смерть приходит колядовать.',
+    accent: '#fbbf24',
+    fact: 'Обряд с черепом лошади на палке. Группа ходит по домам, вступая в стихотворные перепалки с хозяевами ради еды и выпивки.',
+    legend: 'Скелет лошади, украшенный лентами. Она требует войти, и ты должен переспорить её в рифмах.',
+    interpretation: 'Это легализованное вторжение. Социальная обязанность быть гостеприимным, даже когда на пороге сама смерть.',
+    importance: 'Право сказать "нет" непрошеным гостям.',
+    image: './assets/mari_lwyd.png',
+    prompt: 'Mari Lwyd, painted horse skull with colorful floral patterns and ribbons, red pompom, person in red hood, folklore photography, cinematic.'
+  },
+  {
+    id: 'yule_cat',
+    name: 'ЙОЛЬСКИЙ КОТ',
+    region: 'Исландия',
+    tagline: 'Дресс-код или смерть.',
+    accent: '#059669',
+    fact: 'Гигантский кот, который съедает тех, кто не обзавелся новой шерстяной одеждой к Рождеству.',
+    legend: 'Он бродит по заснеженным деревням. Иногда изображается как белый пушистый дух зимы с красным носом, обманчиво милый.',
+    interpretation: 'Жесточайшая метафора социального расслоения. Если ты беден и без обновки — ты еда. Идеальный символ праздничного консьюмеризма.',
+    importance: 'Почему нам стыдно быть без "нового платья".',
+    image: './assets/yule_cat.png',
+    prompt: 'White furry winter creature with small antlers and a red nose, wearing a red and white scarf, cute but uncanny, winter forest background, cinematic.'
   }
 ];
 
-export const AI_STYLE_GUIDE = "museum-grade folkloric portrait, cinematic rim light, subtle fog, low-key lighting, textured background with faint parchment + noise grain, shallow depth of field, centered composition, 4:5 portrait aspect, ultra-detailed, consistent color grading. ABSOLUTELY NO TEXT, no logos, no gore, no children, no explicit violence.";
+export const BASE_URL = '';
+
+export const resolvePath = (path: string) => {
+  if (!path) return '';
+  if (path.startsWith('data:') || path.startsWith('http')) return path;
+  return `${BASE_URL}${path}`;
+};
+
+export const AI_STYLE_GUIDE = 'Cinematic noir, dark academic aesthetic, muted colors with glowing neon highlights, surrealism, high contrast, ultra-detailed 4k render.';
 
 export const PLANNER_CATEGORIES = {
-  identities: ["Женщина", "Мужчина", "Небинарная персона", "Квир", "Агендер", "Предпочитаю не указывать"],
-  company: ["В одиночестве", "С партнером", "С семьей", "С детьми", "С друзьями", "С питомцем", "Онлайн-тусовка"],
-  vibes: ["Спокойствие и дзен", "Творчество", "Активность и спорт", "Мистика и Таро", "Бунт / Панк", "Ретро / Ностальгия", "Романтика"],
-  conditions: ["Без алкоголя", "Нулевой бюджет", "Цифровой детокс", "Zero Waste", "Веганское меню", "Без подарков", "Ранний отбой"]
+  identities: ['Женщина', 'Мужчина', 'Небинарный'],
+  company: ['Один', 'С партнером', 'С друзьями', 'С семьей', 'С детьми'],
+  conditions: ['Дома', 'В другой стране', 'В дороге', 'На работе', 'Без денег']
 };
 
 export const POSTER_THEMES = [
-  "Социум: Одиночество",
-  "Экология: Смерть деревьев",
-  "Долги: Кредитная мишура",
-  "Здоровье: 4 утра",
-  "История: Крампус вернулся"
+  'Осознанность',
+  'Минимализм',
+  'Экология',
+  'Ментальное здоровье',
+  'Правда праздника'
 ];
 
 export const SLOGANS = [
-  "Ты не один в этой тишине",
-  "Праздник внутри тебя",
-  "Честность важнее мишуры",
-  "Мандарины и тишина",
-  "Без фейерверков — с душой"
+  'Меньше мишуры — больше смысла',
+  'Праздник без долгов',
+  'Твой уют — твои правила',
+  'Один — не значит одинок',
+  'Статистика важнее магии'
 ];
 
-export const STYLES = ["Сюрреализм", "Киберпанк", "Минимализм", "Дарк Академи", "Глитч-арт"];
-export const MOTIVES = ["Шокирующая правда", "Уютная меланхолия", "Анти-потребление", "Футуристичный нуар"];
+export const STYLES = [
+  'Cyberpunk Noir',
+  'Minimalist Vector',
+  'Dark Academic',
+  'Glitch Art',
+  'Expressionism'
+];
 
-// Use process.env for environment variables to ensure compatibility with the project's variable handling and fix TS error
-export const BASE_URL = (typeof process !== 'undefined' && process.env.BASE_URL) || '/';
+export const MOTIVES = [
+  'Одинокая елка',
+  'Разбитая игрушка',
+  'Городской туман',
+  'Неоновый мандарин',
+  'Звездное небо'
+];

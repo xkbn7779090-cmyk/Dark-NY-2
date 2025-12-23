@@ -6,22 +6,26 @@ const MusicPlayer: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  // Using a dark ambient atmospheric track
-  const audioUrl = "https://cdn.pixabay.com/audio/2022/01/21/audio_249339e09d.mp3"; // "Cyberpunk City" ambient loop
+  // Reliable MP3 source from Pixabay (Dark Ambient / Horror theme)
+  // Replaces the previous source which caused format errors
+  const audioUrl = "https://cdn.pixabay.com/audio/2022/10/25/audio_2448460677.mp3";
 
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.volume = 0.3; // Low volume for atmosphere
+    audio.volume = 0.4; 
     audio.loop = true;
 
-    const startAudio = () => {
-      audio.play()
-        .then(() => setIsPlaying(true))
-        .catch(() => {
-          console.log("Autoplay blocked. Waiting for interaction.");
-        });
+    const startAudio = async () => {
+      try {
+        await audio.play();
+        setIsPlaying(true);
+      } catch (e) {
+        // Auto-play policy blocked or other error
+        console.log("Audio autoplay waiting for user interaction");
+        setIsPlaying(false);
+      }
     };
 
     // Attempt autoplay
@@ -29,36 +33,48 @@ const MusicPlayer: React.FC = () => {
 
     // Interaction listener to start if blocked
     const handleFirstInteraction = () => {
-      if (!isPlaying) {
+      if (!isPlaying && audio.paused) {
         startAudio();
       }
+      // Remove listeners once tried
       window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
       window.removeEventListener('scroll', handleFirstInteraction);
     };
 
     window.addEventListener('click', handleFirstInteraction);
+    window.addEventListener('keydown', handleFirstInteraction);
     window.addEventListener('scroll', handleFirstInteraction);
 
     return () => {
       window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
       window.removeEventListener('scroll', handleFirstInteraction);
     };
-  }, [isPlaying]);
+  }, []); 
 
   const togglePlay = () => {
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
+        setIsPlaying(false);
       } else {
-        audioRef.current.play();
+        audioRef.current.play().catch(console.error);
+        setIsPlaying(true);
       }
-      setIsPlaying(!isPlaying);
     }
   };
 
   return (
     <div className="fixed top-8 right-8 z-50 flex items-center gap-3">
-      <audio ref={audioRef} src={audioUrl} />
+      <audio 
+        ref={audioRef} 
+        src={audioUrl} 
+        onError={(e) => {
+          console.warn("Audio source failed to load:", e.currentTarget.error?.message);
+          setIsPlaying(false);
+        }}
+      />
       
       <div className="hidden md:block">
         <div className={`text-[10px] font-orbitron uppercase tracking-widest transition-all duration-500 ${isPlaying ? 'text-indigo-400 opacity-100' : 'text-slate-600 opacity-50'}`}>

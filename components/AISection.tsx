@@ -1,17 +1,24 @@
-import React, { useState, useRef } from 'react';
-import { GoogleGenAI } from '@google/genai';
-import { Sparkles, Trash2, Download, Image as ImageIcon, Check, User, Users, Heart, Zap, ShieldCheck, ChevronRight, Share2 } from 'lucide-react';
-import { PLANNER_CATEGORIES, POSTER_THEMES, SLOGANS, STYLES, MOTIVES } from '../constants';
+
+import React, { useState, useRef, useEffect } from 'react';
+import { GoogleGenAI, Modality } from '@google/genai';
+import { Sparkles, Trash2, Download, Image as ImageIcon, Check, User, Users, Heart, Zap, ShieldCheck, ChevronRight, Share2, Printer, Calendar, Key, AlertCircle, Volume2, Loader2 } from 'lucide-react';
+import { PLANNER_CATEGORIES, POSTER_THEMES, SLOGANS, STYLES, MOTIVES, resolvePath } from '../constants';
+import { useApp } from '../App';
 
 const AISection: React.FC = () => {
+  const { isGentleMode } = useApp();
   const [loadingPlan, setLoadingPlan] = useState(false);
   const [loadingPoster, setLoadingPoster] = useState(false);
+  const [loadingAudio, setLoadingAudio] = useState(false);
   const [planResult, setPlanResult] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [posterResult, setPosterResult] = useState<{ url: string, slogan: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [posterError, setPosterError] = useState<string | null>(null);
   const [burning, setBurning] = useState(false);
+  const [hasApiKey, setHasApiKey] = useState(false);
   const planRef = useRef<HTMLDivElement>(null);
 
-  const [age, setAge] = useState(25);
+  const [age, setAge] = useState(28);
   const [identity, setIdentity] = useState("Женщина");
   const [selectedCompany, setSelectedCompany] = useState<string[]>([]);
   const [selectedVibes, setSelectedVibes] = useState<string[]>([]);
@@ -21,6 +28,30 @@ const AISection: React.FC = () => {
   const [posterSlogan, setPosterSlogan] = useState(SLOGANS[1]);
   const [posterStyle, setPosterStyle] = useState(STYLES[0]);
   const [posterMotive, setPosterMotive] = useState(MOTIVES[0]);
+
+  useEffect(() => {
+    const checkKey = async () => {
+      const aistudio = (window as any).aistudio;
+      if (aistudio && typeof aistudio.hasSelectedApiKey === 'function') {
+        const selected = await aistudio.hasSelectedApiKey();
+        setHasApiKey(selected);
+      }
+    };
+    checkKey();
+  }, []);
+
+  const handleSelectKey = async () => {
+    const aistudio = (window as any).aistudio;
+    if (aistudio && typeof aistudio.openSelectKey === 'function') {
+      await aistudio.openSelectKey();
+      setHasApiKey(true);
+      setError(null);
+      setPosterError(null);
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return true;
+    }
+    return false;
+  };
 
   const toggleSelection = (list: string[], setList: (l: string[]) => void, item: string) => {
     if (list.includes(item)) {
@@ -33,28 +64,30 @@ const AISection: React.FC = () => {
   const handleGeneratePlan = async () => {
     setLoadingPlan(true);
     setPlanResult(null);
+    setError(null);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `
-        Ты — эксперт по осознанному образу жизни. Сгенерируй сценарий праздника для человека:
-        Возраст: ${age}, Идентификация: ${identity}
-        Компания: ${selectedCompany.join(', ')}
-        Вайб: ${selectedVibes.join(', ')}
-        Условия: ${selectedConditions.join(', ')}
+        Ты — эксперт по осознанному образу жизни и социальной деконструкции. Сгенерируй детальный "Тихий сценарий" на Новый год для человека:
+        Возраст: ${age}, Пол/Идентификация: ${identity}
+        Компания: ${selectedCompany.join(', ') || 'Одиночество'}
+        Вайб: ${selectedVibes.join(', ') || 'Минимализм'}
+        Условия: ${selectedConditions.join(', ') || 'Стандартные'}
         
-        Сценарий должен быть на русском, иметь четкую структуру:
-        1. Таймлайн (вечер/ночь)
-        2. Мини-ритуал для себя
-        3. Социальный сценарий (если не один)
-        4. Если накроет тревога (поддержка)
+        ОТВЕТЬ В ФОРМАТЕ MARKDOWN С ЗАГОЛОВКАМИ:
+        1. **Философия вечера**: Почему этот выбор важен.
+        2. **Таймлайн (20:00 - 01:00)**: Пошаговые действия для комфорта.
+        3. **Меню для души**: Что съесть и выпить (без похмелья и тяжести).
+        4. **Ментальный ритуал**: Упражнение на осознанность.
+        5. **Кнопка выхода**: Как уйти от нежелательного общения.
         
-        Используй теплую, поддерживающую интонацию.
+        Тон: ${isGentleMode ? 'Бережный, поддерживающий, мягкий.' : 'Прямой, честный, немного циничный в отношении традиций.'}
       `;
       const res = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
-      setPlanResult(res.text || 'Ошибка генерации');
-      setTimeout(() => planRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-    } catch (e) {
-      setPlanResult("Не удалось связаться with AI. Проверьте подключение.");
+      setPlanResult(res.text || 'Ошибка генерации текста');
+      setTimeout(() => planRef.current?.scrollIntoView({ behavior: 'smooth' }), 200);
+    } catch (e: any) {
+      setError("Не удалось связаться с AI. Проверьте ваш API ключ или интернет.");
     } finally {
       setLoadingPlan(false);
     }
@@ -62,33 +95,81 @@ const AISection: React.FC = () => {
 
   const handleGeneratePoster = async () => {
     setLoadingPoster(true);
-    setImageUrl(null);
+    setPosterResult(null);
+    setPosterError(null);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `
-        Conceptual artistic image for a "conscious New Year" campaign. 
-        Theme: ${posterTheme}. 
-        Visual Slogan Concept: ${posterSlogan}. 
-        Style: ${posterStyle}. 
-        Motive: ${posterMotive}.
-        
-        Dark cinematic noir aesthetic. Symbolic, deep shadows, neon highlights.
-        NO TEXT ON THE IMAGE.
-      `;
+      const prompt = `A cinematic conceptual poster for a "Conscious New Year". Theme: ${posterTheme}. Idea: ${posterSlogan}. Style: ${posterStyle}. Central element: ${posterMotive}. Moody dark atmosphere with neon highlights in cyan and crimson. Ultra-high detail, professional photography aesthetic. ABSOLUTELY NO TEXT ON IMAGE.`;
       const res = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: prompt }] },
         config: { imageConfig: { aspectRatio: "1:1" } }
       });
-      const parts = res.candidates?.[0]?.content?.parts || [];
-      const imgPart = parts.find(p => p.inlineData);
+      const imgPart = res.candidates?.[0]?.content?.parts.find(p => p.inlineData);
       if (imgPart?.inlineData) {
-        setImageUrl(`data:image/png;base64,${imgPart.inlineData.data}`);
+        setPosterResult({
+          url: `data:image/png;base64,${imgPart.inlineData.data}`,
+          slogan: posterSlogan
+        });
+      } else {
+        throw new Error('Image not generated');
+      }
+    } catch (e: any) {
+      setPosterError("Ошибка генерации манифеста. Попробуйте другой стиль.");
+    } finally {
+      setLoadingPoster(false);
+    }
+  };
+
+  const handleDownloadPoster = () => {
+    if (!posterResult) return;
+    const link = document.createElement('a');
+    link.href = posterResult.url;
+    link.download = `manifesto-${Date.now()}.png`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleHearPlan = async () => {
+    if (!planResult || loadingAudio) return;
+    setLoadingAudio(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-preview-tts",
+        contents: [{ parts: [{ text: `Прочитай этот план спокойным и поддерживающим голосом: ${planResult.slice(0, 1000)}` }] }],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } },
+          },
+        },
+      });
+      
+      const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const ctx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+        const binaryString = atob(base64Audio);
+        const len = binaryString.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) bytes[i] = binaryString.charCodeAt(i);
+        
+        const dataInt16 = new Int16Array(bytes.buffer);
+        const buffer = ctx.createBuffer(1, dataInt16.length, 24000);
+        const channelData = buffer.getChannelData(0);
+        for (let i = 0; i < dataInt16.length; i++) channelData[i] = dataInt16[i] / 32768.0;
+        
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
       }
     } catch (e) {
       console.error(e);
+      alert('Ошибка синтеза речи.');
     } finally {
-      setLoadingPoster(false);
+      setLoadingAudio(false);
     }
   };
 
@@ -96,155 +177,215 @@ const AISection: React.FC = () => {
     setBurning(true);
     setTimeout(() => {
       setPlanResult(null);
+      setError(null);
       setBurning(false);
     }, 1000);
   };
 
-  const getPlaceholder = (text: string) => 
-    `https://via.placeholder.com/1080/020617/6366f1?text=${encodeURIComponent(text)}`;
-
   return (
-    <section id="ai-section" className="py-16 md:py-24 px-4 md:px-6 bg-slate-950 overflow-hidden">
-      <div className="max-w-6xl mx-auto space-y-24 md:space-y-32">
+    <section id="ai-section" className="py-24 px-6 bg-[#020617] overflow-hidden">
+      <div className="max-w-7xl mx-auto space-y-32 md:space-y-48">
         
-        <div className="space-y-12 md:space-y-16">
-          <div className="text-center space-y-4">
-            <h2 className="text-3xl sm:text-4xl md:text-6xl lg:text-8xl font-bold font-orbitron leading-tight tracking-tighter">
-              Генератор <span className="text-indigo-500 italic">Альтернативы</span>
+        {/* Planner Section */}
+        <div className="space-y-20">
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center gap-2 px-5 py-2 bg-indigo-950/40 border border-indigo-500/30 rounded-full text-[10px] text-indigo-400 font-black uppercase tracking-[0.4em]">
+              <Sparkles size={14} className="animate-pulse" /> Твой персональный сценарий
+            </div>
+            <h2 className="text-5xl md:text-9xl font-black font-orbitron leading-none tracking-tighter text-white">
+              Генератор <span className="text-indigo-500 italic">Свободы</span>
             </h2>
-            <p className="text-slate-500 text-sm md:text-lg font-light">Создайте сценарий праздника, который подходит именно вам.</p>
+            <p className="text-slate-500 text-lg md:text-2xl font-light max-w-3xl mx-auto">
+              Праздник — это не обязанность. Настрой параметры и получи пошаговый план вечера, где ты — главный герой.
+            </p>
           </div>
 
-          <div className="glass-morphism rounded-[2rem] md:rounded-[3rem] p-6 sm:p-8 md:p-14 border border-slate-800 space-y-12 md:space-y-16 relative">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 md:gap-20">
-              <div className="space-y-6 md:space-y-8">
-                <div className="flex justify-between items-center">
-                  <span className="flex items-center gap-2 text-[10px] md:text-xs uppercase tracking-widest text-indigo-400 font-bold">
-                    <User size={14} /> Возраст
-                  </span>
-                  <span className="text-2xl md:text-3xl font-bold font-orbitron text-white">{age} лет</span>
+          {!hasApiKey && (
+            <div className="max-w-2xl mx-auto p-8 border border-amber-500/30 bg-amber-500/5 rounded-[2rem] text-center space-y-6 mb-12 backdrop-blur-md">
+              <AlertCircle className="mx-auto text-amber-500" size={40} />
+              <p className="text-slate-300 font-medium">Для работы AI необходимо активировать платный API-ключ в настройках браузера.</p>
+              <button 
+                onClick={handleSelectKey}
+                className="px-8 py-4 bg-amber-500 text-black font-black rounded-full hover:bg-amber-400 transition-all flex items-center gap-3 mx-auto shadow-xl"
+              >
+                <Key size={18} /> Выбрать API Ключ
+              </button>
+            </div>
+          )}
+
+          <div className="glass-morphism rounded-[3.5rem] p-8 md:p-20 border border-slate-800 shadow-[0_0_100px_rgba(0,0,0,0.5)] relative bg-black/40">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 lg:gap-32">
+              <div className="space-y-12">
+                <div className="space-y-8">
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-indigo-400 font-black">
+                      <User size={18} /> Твой возраст
+                    </span>
+                    <span className="text-4xl font-black font-orbitron text-white">{age}</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="18" max="100" 
+                    value={age} 
+                    onChange={e => setAge(Number(e.target.value))} 
+                    className="w-full accent-indigo-500 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer" 
+                  />
                 </div>
-                <input 
-                  type="range" 
-                  min="18" max="100" 
-                  value={age} 
-                  onChange={e => setAge(Number(e.target.value))} 
-                  className="w-full accent-indigo-500 h-1.5 md:h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer" 
+
+                <div className="space-y-8">
+                  <span className="flex items-center gap-3 text-[10px] uppercase tracking-[0.3em] text-indigo-400 font-black">
+                    <ShieldCheck size={18} /> Идентификация
+                  </span>
+                  <div className="flex flex-wrap gap-3">
+                    {PLANNER_CATEGORIES.identities.map(id => (
+                      <button
+                        key={id}
+                        onClick={() => setIdentity(id)}
+                        className={`px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all border ${
+                          identity === id 
+                          ? 'bg-indigo-600 text-white shadow-2xl border-indigo-400' 
+                          : 'bg-slate-900/40 text-slate-500 border-slate-800 hover:border-slate-600'
+                        }`}
+                      >
+                        {id}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-12">
+                <CategoryGroup 
+                  icon={<Users size={18} />} 
+                  title="Компания" 
+                  items={PLANNER_CATEGORIES.company} 
+                  selected={selectedCompany} 
+                  onToggle={i => toggleSelection(selectedCompany, setSelectedCompany, i)} 
+                />
+                <CategoryGroup 
+                  icon={<Zap size={18} />} 
+                  title="Условия" 
+                  items={PLANNER_CATEGORIES.conditions} 
+                  selected={selectedConditions} 
+                  onToggle={i => toggleSelection(selectedConditions, setSelectedConditions, i)} 
                 />
               </div>
-
-              <div className="space-y-4 md:space-y-6">
-                <span className="flex items-center gap-2 text-[10px] md:text-xs uppercase tracking-widest text-indigo-400 font-bold">
-                  <ShieldCheck size={14} /> Я идентифицирую себя как
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {PLANNER_CATEGORIES.identities.map(id => (
-                    <button
-                      key={id}
-                      onClick={() => setIdentity(id)}
-                      className={`px-4 py-2 md:px-6 md:py-3 rounded-xl md:rounded-2xl text-[10px] md:text-xs font-bold transition-all ${
-                        identity === id 
-                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/30' 
-                        : 'bg-slate-900/40 text-slate-400 border border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      {id}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8 md:gap-12">
-              <CategoryGroup 
-                icon={<Users size={16} />} 
-                title="Компания" 
-                items={PLANNER_CATEGORIES.company} 
-                selected={selectedCompany} 
-                onToggle={i => toggleSelection(selectedCompany, setSelectedCompany, i)} 
-              />
-              <CategoryGroup 
-                icon={<Heart size={16} />} 
-                title="Вайб" 
-                items={PLANNER_CATEGORIES.vibes} 
-                selected={selectedVibes} 
-                onToggle={i => toggleSelection(selectedVibes, setSelectedVibes, i)} 
-              />
-              <CategoryGroup 
-                icon={<Zap size={16} />} 
-                title="Условия" 
-                items={PLANNER_CATEGORIES.conditions} 
-                selected={selectedConditions} 
-                onToggle={i => toggleSelection(selectedConditions, setSelectedConditions, i)} 
-              />
-            </div>
-
-            <div className="flex justify-center pt-4 md:pt-8">
+            <div className="flex justify-center mt-16">
               <button 
                 onClick={handleGeneratePlan}
-                disabled={loadingPlan}
-                className="group w-full sm:w-auto px-10 md:px-20 py-4 md:py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] md:rounded-[2rem] font-bold text-lg md:text-2xl transition-all shadow-2xl shadow-indigo-600/20 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-4"
+                disabled={loadingPlan || !hasApiKey}
+                className="group w-full md:w-auto px-16 py-7 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[2.5rem] font-black text-xl md:text-2xl transition-all shadow-2xl shadow-indigo-900/40 active:scale-95 disabled:opacity-30 flex items-center justify-center gap-5 border border-indigo-400/30"
               >
-                {loadingPlan ? 'Инициализация...' : 'Создать Сценарий'}
-                <ChevronRight className="group-hover:translate-x-1 transition-transform" />
+                {loadingPlan ? (
+                  <>
+                    <Loader2 className="animate-spin" size={28} />
+                    <span>Формирование сценария...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Сгенерировать План</span>
+                    <ChevronRight className="group-hover:translate-x-2 transition-transform" />
+                  </>
+                )}
               </button>
             </div>
 
-            {planResult && (
-              <div ref={planRef} className={`mt-12 md:mt-20 p-6 md:p-12 bg-slate-900/30 rounded-[2rem] md:rounded-[3rem] border border-indigo-500/20 animate-fade-in relative shadow-inner ${burning ? 'animate-[burn_1s_forwards]' : ''}`}>
-                <div className="absolute top-4 right-4 md:top-8 md:right-8 flex gap-2 md:gap-4">
-                   <button onClick={burnPlan} className="p-2 md:p-4 text-red-500 hover:bg-red-500/10 rounded-full transition-colors" title="Сжечь">
-                    <Trash2 size={24} className="md:w-7 md:h-7" />
+            {(planResult || error) && (
+              <div ref={planRef} className={`mt-24 p-10 md:p-20 bg-slate-950/60 rounded-[3rem] border ${error ? 'border-red-500/30' : 'border-indigo-500/20'} relative shadow-inner overflow-hidden ${burning ? 'animate-[burn_1.2s_forwards]' : 'animate-fade-in'}`}>
+                <div className="absolute top-10 right-10 flex gap-4 z-10">
+                   {planResult && (
+                     <>
+                      <button 
+                        onClick={handleHearPlan} 
+                        disabled={loadingAudio}
+                        className="p-4 bg-indigo-600/10 text-indigo-400 hover:bg-indigo-600 hover:text-white rounded-full transition-all border border-indigo-500/20" 
+                        title="Прослушать план"
+                      >
+                        {loadingAudio ? <Loader2 size={24} className="animate-spin" /> : <Volume2 size={24} />}
+                      </button>
+                      <button onClick={() => window.print()} className="p-4 text-slate-500 hover:text-white hover:bg-white/10 rounded-full transition-all" title="Печать">
+                        <Printer size={24} />
+                      </button>
+                     </>
+                   )}
+                   <button onClick={burnPlan} className="p-4 text-slate-500 hover:text-red-500 hover:bg-red-500/10 rounded-full transition-all" title="Сжечь план">
+                    <Trash2 size={24} />
                   </button>
                 </div>
-                <div className="prose prose-invert max-w-none text-slate-200 leading-relaxed font-light text-base md:text-2xl whitespace-pre-wrap">
-                  {planResult}
-                </div>
-                <div className="mt-8 md:mt-12 flex flex-wrap gap-3 md:gap-4">
-                  <button className="flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-xs font-bold hover:bg-white/10 transition-all uppercase tracking-widest">
-                    <Download size={14} /> PDF
-                  </button>
-                  <button className="flex items-center gap-2 px-4 py-2 md:px-6 md:py-3 bg-white/5 border border-white/10 rounded-xl text-[10px] md:text-xs font-bold hover:bg-white/10 transition-all uppercase tracking-widest">
-                    <Share2 size={14} /> Поделиться
-                  </button>
-                </div>
+                
+                {error ? (
+                  <div className="flex items-center gap-6 text-red-400 p-8 bg-red-950/20 rounded-3xl border border-red-900/30">
+                    <AlertCircle className="shrink-0 text-red-500" size={32} />
+                    <p className="text-xl leading-relaxed">{error}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="prose prose-invert prose-indigo max-w-none prose-headings:font-orbitron prose-headings:text-indigo-400 prose-headings:uppercase prose-headings:tracking-widest prose-p:text-slate-300 prose-li:text-slate-300">
+                       <div className="font-light text-xl md:text-2xl leading-relaxed whitespace-pre-wrap selection:bg-indigo-500/40">
+                        {planResult}
+                      </div>
+                    </div>
+
+                    <div className="mt-16 flex flex-wrap gap-5 border-t border-white/5 pt-12">
+                      <button className="flex items-center gap-3 px-8 py-4 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-black hover:bg-white/10 transition-all uppercase tracking-widest text-slate-400 hover:text-white">
+                        <Calendar size={16} /> Добавить в iCal
+                      </button>
+                      <button 
+                        className="flex items-center gap-3 px-8 py-4 bg-indigo-600 text-white rounded-2xl text-[10px] font-black hover:bg-indigo-500 transition-all uppercase tracking-widest shadow-xl" 
+                        onClick={() => {
+                          if (planResult) {
+                            navigator.clipboard.writeText(planResult);
+                            alert('Текст скопирован');
+                          }
+                        }}
+                      >
+                        <Share2 size={16} /> Поделиться
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 md:gap-20 items-start">
-          <div className="space-y-8 md:space-y-10">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-950/40 border border-indigo-500/30 rounded-full text-[10px] text-indigo-400 font-bold uppercase tracking-widest">
-              <Sparkles size={12} /> AI Дизайнер
+        {/* Poster Generator */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-20 lg:gap-40 items-start">
+          <div className="space-y-16">
+            <div className="space-y-8">
+              <div className="inline-flex items-center gap-2 px-5 py-2 bg-emerald-950/40 border border-emerald-500/30 rounded-full text-[10px] text-emerald-400 font-black uppercase tracking-[0.4em]">
+                <ImageIcon size={14} /> Визуальный манифест
+              </div>
+              <h2 className="text-5xl md:text-9xl font-black font-orbitron leading-none tracking-tighter text-white">
+                Арт <br /><span className="text-emerald-400">Правда</span>
+              </h2>
+              <p className="text-slate-400 text-xl md:text-2xl font-light leading-relaxed">
+                Твой праздник — твоя позиция. Создай уникальный постер-высказывание для своих социальных сетей.
+              </p>
             </div>
-            <h2 className="text-4xl md:text-6xl lg:text-8xl font-bold font-orbitron leading-tight tracking-tighter">
-              Материалы для <br /><span className="text-indigo-400">Осознанности</span>
-            </h2>
-            <p className="text-slate-400 text-lg md:text-xl font-light leading-relaxed max-w-lg">
-              Сгенерируйте уникальный визуальный контент — плакат, открытку или слайд. Выберите тему, лозунг и стиль.
-            </p>
 
-            <div className="space-y-6 md:space-y-8 glass-morphism p-6 md:p-12 rounded-[2rem] md:rounded-[3rem] border border-slate-800">
-              <div className="space-y-2">
-                <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Тема</label>
+            <div className="space-y-12 glass-morphism p-10 md:p-16 rounded-[3.5rem] border border-slate-800 bg-black/40 shadow-2xl">
+              <div className="space-y-4">
+                <label className="text-[10px] uppercase text-slate-600 font-black tracking-[0.3em]">Тема кампании</label>
                 <select 
                   value={posterTheme} 
                   onChange={e => setPosterTheme(e.target.value)}
-                  className="w-full p-3 md:p-4 bg-slate-950 border border-slate-800 rounded-xl md:rounded-2xl text-white outline-none focus:border-indigo-500 transition-all appearance-none cursor-pointer text-sm md:text-base"
+                  className="w-full p-5 bg-slate-950 border border-slate-800 rounded-3xl text-white focus:border-emerald-500 transition-all cursor-pointer text-base font-medium appearance-none"
                 >
                   {POSTER_THEMES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
 
-              <div className="space-y-3 md:space-y-4">
-                <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Слоган (Концепт)</label>
-                <div className="grid gap-2">
+              <div className="space-y-4">
+                <label className="text-[10px] uppercase text-slate-600 font-black tracking-[0.3em]">Лозунг-концепт</label>
+                <div className="flex flex-col gap-3">
                   {SLOGANS.map(s => (
                     <button
                       key={s}
                       onClick={() => setPosterSlogan(s)}
-                      className={`p-3 md:p-4 text-left rounded-xl md:rounded-2xl text-xs md:text-sm transition-all border ${posterSlogan === s ? 'bg-indigo-900/30 border-indigo-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'}`}
+                      className={`p-5 text-left rounded-2xl text-sm transition-all border font-bold ${posterSlogan === s ? 'bg-emerald-900/30 border-emerald-500 text-white shadow-xl' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}
                     >
                       {s}
                     </button>
@@ -252,73 +393,102 @@ const AISection: React.FC = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 md:gap-4">
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Стиль</label>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-3">
+                  <label className="text-[10px] uppercase text-slate-600 font-black tracking-[0.3em]">Стиль</label>
                   <select 
                     value={posterStyle} 
                     onChange={e => setPosterStyle(e.target.value)}
-                    className="w-full p-2.5 md:p-3 bg-slate-950 border border-slate-800 rounded-xl md:rounded-2xl text-white outline-none focus:border-indigo-500 text-xs md:text-sm"
+                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-white text-xs font-bold appearance-none"
                   >
                     {STYLES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] uppercase text-slate-500 font-bold tracking-widest">Мотив</label>
+                <div className="space-y-3">
+                  <label className="text-[10px] uppercase text-slate-600 font-black tracking-[0.3em]">Мотив</label>
                   <select 
                     value={posterMotive} 
                     onChange={e => setPosterMotive(e.target.value)}
-                    className="w-full p-2.5 md:p-3 bg-slate-950 border border-slate-800 rounded-xl md:rounded-2xl text-white outline-none focus:border-indigo-500 text-xs md:text-sm"
+                    className="w-full p-4 bg-slate-950 border border-slate-800 rounded-2xl text-white text-xs font-bold appearance-none"
                   >
                     {MOTIVES.map(m => <option key={m} value={m}>{m}</option>)}
                   </select>
                 </div>
               </div>
 
+              {posterError && (
+                <div className="p-6 bg-red-950/20 border border-red-900/30 rounded-2xl flex items-center gap-3 text-red-400 font-bold uppercase text-[10px]">
+                  <AlertCircle size={20} />
+                  <p>{posterError}</p>
+                </div>
+              )}
+
               <button 
                 onClick={handleGeneratePoster}
-                disabled={loadingPoster}
-                className="w-full py-4 md:py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl md:rounded-3xl font-bold text-base md:text-xl transition-all shadow-xl shadow-indigo-900/20 active:scale-[0.98] disabled:opacity-50"
+                disabled={loadingPoster || !hasApiKey}
+                className="w-full py-7 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[2rem] font-black text-xl md:text-2xl transition-all shadow-2xl shadow-emerald-950/20 active:scale-[0.98] disabled:opacity-30 flex items-center justify-center gap-4 border border-emerald-400/30"
               >
-                {loadingPoster ? 'Отрисовка Арт-объекта...' : 'Создать Арт'}
+                {loadingPoster ? <><Loader2 className="animate-spin" size={24} /> Рендеринг манифеста...</> : 'Создать Манифест'}
               </button>
             </div>
           </div>
 
-          <div className="lg:sticky lg:top-24 aspect-[4/5] w-full glass-morphism rounded-[2rem] md:rounded-[3rem] border border-slate-800 overflow-hidden flex flex-col items-center justify-center p-4 md:p-6 shadow-2xl bg-slate-900/50">
-            {imageUrl ? (
-              <div className="relative w-full h-full group animate-fade-in flex flex-col">
-                <div className="flex-1 overflow-hidden rounded-[1.5rem] md:rounded-[2rem] border border-white/5 bg-black/20">
+          <div className="lg:sticky lg:top-32 w-full glass-morphism rounded-[4rem] border border-slate-800 overflow-hidden flex flex-col items-center justify-center p-6 md:p-12 shadow-[0_0_80px_rgba(0,0,0,0.6)] bg-black/60 group">
+            {posterResult ? (
+              <div className="relative w-full animate-fade-in flex flex-col items-center">
+                <div className="relative w-full aspect-square overflow-hidden rounded-[3rem] border border-white/5 bg-black/40 shadow-inner">
                    <img 
-                    src={imageUrl} 
-                    alt="AI Generated Poster" 
+                    src={resolvePath(posterResult.url)} 
+                    alt="AI Poster" 
                     className="w-full h-full object-cover" 
-                    onError={(e) => { (e.target as HTMLImageElement).src = getPlaceholder('Generated Poster'); }}
                    />
+                   <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-6">
+                     <button 
+                       onClick={handleDownloadPoster}
+                       className="px-10 py-5 bg-white text-black font-black rounded-full hover:scale-110 active:scale-95 transition-all flex items-center gap-3 shadow-2xl"
+                     >
+                       <Download size={24} /> Скачать High-Res
+                     </button>
+                   </div>
                 </div>
-                <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-opacity rounded-[1.5rem] md:rounded-[2rem] gap-4 md:gap-6">
-                  <button className="flex items-center gap-3 px-6 py-3 md:px-8 md:py-4 bg-white text-black rounded-full font-bold shadow-2xl hover:scale-110 active:scale-95 transition-all text-sm md:text-base">
-                    <Download size={20} /> Скачать
-                  </button>
-                </div>
-                <div className="mt-4 md:mt-6 text-center">
-                   <p className="text-indigo-400 font-orbitron text-[10px] md:text-xs font-bold uppercase tracking-[0.4em] truncate px-2">{posterSlogan}</p>
+                
+                <div className="mt-10 w-full text-center space-y-8">
+                   <p className="text-emerald-400 font-orbitron text-sm font-black uppercase tracking-[0.5em] truncate px-6">
+                    {posterResult.slogan}
+                   </p>
+                   
+                   <div className="flex justify-center">
+                    <button 
+                      onClick={handleDownloadPoster}
+                      className="flex items-center gap-3 px-8 py-4 bg-emerald-600/10 border border-emerald-500/30 rounded-2xl text-[10px] font-black hover:bg-emerald-600 hover:text-white transition-all uppercase tracking-widest text-emerald-400 shadow-xl"
+                    >
+                      <Download size={18} /> Сохранить манифест
+                    </button>
+                   </div>
                 </div>
               </div>
             ) : (
-              <div className="text-center space-y-4 md:space-y-6 opacity-20">
-                <ImageIcon size={64} className="mx-auto md:w-20 md:h-20" />
-                <p className="font-orbitron uppercase text-xs md:text-sm tracking-[0.4em] font-bold">Ожидание Сигнала</p>
-                <p className="text-[8px] md:text-xs text-slate-500 max-w-[150px] md:max-w-[200px] mx-auto uppercase">Визуальная правда будет здесь</p>
+              <div className="text-center space-y-8 opacity-20 group-hover:opacity-30 transition-opacity aspect-square flex flex-col items-center justify-center">
+                <ImageIcon size={100} className="mx-auto text-slate-700" />
+                <div className="space-y-3">
+                  <p className="font-orbitron uppercase text-lg tracking-[0.8em] font-black text-white">READY FOR RENDER</p>
+                  <p className="text-[10px] text-slate-500 max-w-[250px] mx-auto uppercase tracking-[0.3em] font-black">Визуальное высказывание будет проявлено после настройки параметров</p>
+                </div>
               </div>
             )}
 
             {loadingPoster && (
-              <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md flex flex-col items-center justify-center gap-4 md:gap-6 z-20">
-                <div className="w-12 h-12 md:w-20 md:h-20 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
-                <div className="text-center space-y-1 md:space-y-2">
-                  <p className="text-indigo-400 font-bold tracking-[0.5em] animate-pulse font-orbitron uppercase text-[10px] md:text-xs">ВИЗУАЛИЗАЦИЯ...</p>
-                  <p className="text-[8px] md:text-[10px] text-slate-600 font-bold">GEMINI ENGINE: ACTIVE</p>
+              <div className="absolute inset-0 bg-slate-950/90 backdrop-blur-2xl flex flex-col items-center justify-center gap-10 z-20">
+                <div className="relative">
+                  <div className="w-32 h-32 border-8 border-emerald-500/10 rounded-full"></div>
+                  <div className="absolute inset-0 w-32 h-32 border-8 border-emerald-500 border-t-transparent rounded-full animate-spin"></div>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="text-emerald-500"><Sparkles size={32} className="animate-pulse" /></span>
+                  </div>
+                </div>
+                <div className="text-center space-y-3">
+                  <p className="text-emerald-400 font-black tracking-[0.6em] animate-pulse font-orbitron uppercase text-sm">ВИЗУАЛИЗАЦИЯ ПОТОКА</p>
+                  <p className="text-[10px] text-slate-600 font-black uppercase tracking-[0.3em]">GEMINI_IMAGE_GEN_v2.5_ACTIVE</p>
                 </div>
               </div>
             )}
@@ -328,24 +498,9 @@ const AISection: React.FC = () => {
 
       <style>{`
         @keyframes burn {
-          0% { filter: brightness(1); transform: scale(1); opacity: 1; }
-          20% { filter: brightness(2) contrast(1.5); transform: scale(1.02); }
-          100% { filter: brightness(0) blur(40px); transform: translateY(-100px) scale(0.8); opacity: 0; }
-        }
-        input[type='range']::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          height: 20px;
-          width: 20px;
-          border-radius: 50%;
-          background: #6366f1;
-          box-shadow: 0 0 10px rgba(99, 102, 241, 0.5);
-          cursor: pointer;
-        }
-        @media (min-width: 768px) {
-          input[type='range']::-webkit-slider-thumb {
-            height: 24px;
-            width: 24px;
-          }
+          0% { filter: brightness(1) blur(0); transform: scale(1); opacity: 1; }
+          30% { filter: brightness(3) contrast(1.5) blur(2px); transform: scale(1.03); }
+          100% { filter: brightness(0) blur(60px); transform: translateY(-150px) scale(0.6); opacity: 0; }
         }
       `}</style>
     </section>
@@ -353,26 +508,25 @@ const AISection: React.FC = () => {
 };
 
 const CategoryGroup: React.FC<{ icon: React.ReactNode, title: string, items: string[], selected: string[], onToggle: (i: string) => void }> = ({ icon, title, items, selected, onToggle }) => (
-  <div className="space-y-4 md:space-y-6">
-    <div className="flex items-center gap-3 text-[9px] md:text-[10px] uppercase text-slate-500 font-bold tracking-[0.4em]">
+  <div className="space-y-8">
+    <div className="flex items-center gap-4 text-[10px] uppercase text-slate-600 font-black tracking-[0.4em]">
       {icon} {title}
-      <span className="ml-auto text-[7px] md:text-[8px] bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">Multi</span>
     </div>
-    <div className="grid gap-2 md:gap-3">
+    <div className="flex flex-col gap-4">
       {items.map(item => (
         <button
           key={item}
           onClick={() => onToggle(item)}
-          className={`flex items-center gap-3 md:gap-4 p-3 md:p-5 rounded-xl md:rounded-[1.5rem] text-xs md:text-sm transition-all duration-300 border ${
+          className={`flex items-center gap-5 p-5 rounded-3xl text-sm transition-all duration-500 border font-bold ${
             selected.includes(item) 
-            ? 'bg-indigo-900/10 border-indigo-500 text-white shadow-xl shadow-indigo-600/10' 
-            : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-700'
+            ? 'bg-indigo-900/30 border-indigo-500 text-white shadow-2xl' 
+            : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-700'
           }`}
         >
-          <div className={`w-5 h-5 md:w-6 md:h-6 rounded-md md:rounded-lg flex items-center justify-center border transition-all ${selected.includes(item) ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-950 border-slate-800'}`}>
-            {selected.includes(item) && <Check size={14} className="text-white md:w-4 md:h-4" />}
+          <div className={`w-6 h-6 rounded-lg flex items-center justify-center border-2 transition-all ${selected.includes(item) ? 'bg-indigo-600 border-indigo-400 scale-110' : 'bg-slate-950 border-slate-800'}`}>
+            {selected.includes(item) && <Check size={16} className="text-white" strokeWidth={3} />}
           </div>
-          <span className="font-medium truncate">{item}</span>
+          <span className="truncate">{item}</span>
         </button>
       ))}
     </div>
